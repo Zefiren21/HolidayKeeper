@@ -1,3 +1,4 @@
 holidays.json
-holidays.json.tmp
+holidays.json.*
+holidaykeeper.db*
 __pycache__/
