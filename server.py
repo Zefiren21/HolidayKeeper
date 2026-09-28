@@ -1,43 +1,52 @@
 #!/usr/bin/env python3
 """HolidayKeeper: a holiday tracker you host on your laptop and open from your phone.
 
-Run:  python3 server.py [--port 8000] [--data DIR]
+Run:  python3 server.py [--port 8000] [--data DIR] [--no-browser]
+      (or double-click HolidayKeeper.exe on Windows)
 Then open the "Phone" URL it prints on any device on the same Wi-Fi.
 """
 
 import argparse
 import os
-import socket
+import sys
+import threading
+import webbrowser
 
-from holidaykeeper.web import make_server
+from holidaykeeper.web import lan_ip, make_server
 
-ROOT = os.path.dirname(os.path.abspath(__file__))
+FROZEN = getattr(sys, "frozen", False)  # True inside the PyInstaller .exe
+# The .exe keeps its database next to itself; the script keeps it next to server.py.
+ROOT = os.path.dirname(sys.executable if FROZEN else os.path.abspath(__file__))
+DEFAULT_PORTS = range(8000, 8010)
 
 
-def lan_ip():
-    """Best guess at this machine's address on the local network."""
-    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    try:
-        # No packets are sent; this just asks the OS which interface it would route through.
-        s.connect(("10.255.255.255", 1))
-        return s.getsockname()[0]
-    except OSError:
-        return "127.0.0.1"
-    finally:
-        s.close()
+def start_server(ports, data):
+    """Bind to the first free port; returns (server, port)."""
+    error = None
+    for port in ports:
+        try:
+            return make_server("0.0.0.0", port, data), port
+        except OSError as e:
+            error = e
+    raise SystemExit(f"Couldn't start the server: {error}\n"
+                     "Is HolidayKeeper already running? Otherwise try --port 8080.")
 
 
 def main():
     parser = argparse.ArgumentParser(description="Run the HolidayKeeper server.")
-    parser.add_argument("--port", type=int, default=8000)
-    parser.add_argument("--data", default=ROOT, help="folder for the database (default: next to server.py)")
+    parser.add_argument("--port", type=int, help="port to listen on (default: first free one from 8000)")
+    parser.add_argument("--data", default=ROOT, help="folder for the database (default: next to the program)")
+    parser.add_argument("--no-browser", action="store_true", help="don't open the app in a browser on start")
     args = parser.parse_args()
 
-    server = make_server("0.0.0.0", args.port, args.data)
+    server, port = start_server([args.port] if args.port else DEFAULT_PORTS, args.data)
     print("HolidayKeeper is running:")
-    print(f"  Laptop: http://localhost:{args.port}")
-    print(f"  Phone:  http://{lan_ip()}:{args.port}   (same Wi-Fi)")
-    print("Press Ctrl+C to stop.")
+    print(f"  Laptop: http://localhost:{port}")
+    print(f"  Phone:  http://{lan_ip()}:{port}   (same Wi-Fi)")
+    print(f"  Data:   {os.path.join(os.path.abspath(args.data), 'holidaykeeper.db')}")
+    print("Close this window (or press Ctrl+C) to stop.", flush=True)
+    if not args.no_browser:
+        threading.Timer(0.5, webbrowser.open, [f"http://localhost:{port}"]).start()
     try:
         server.serve_forever()
     except KeyboardInterrupt:
@@ -45,4 +54,12 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except SystemExit as e:
+        # Double-clicked .exe windows close instantly; keep errors on screen.
+        if FROZEN and e.code not in (None, 0):
+            print(e.code if isinstance(e.code, str) else "")
+            input("Press Enter to close...")
+            sys.exit(1)
+        raise

@@ -40,6 +40,16 @@ CREATE TABLE IF NOT EXISTS holidays (
     note TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS holidays_user ON holidays(user_id, start);
+CREATE TABLE IF NOT EXISTS shares (
+    owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    viewer_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    PRIMARY KEY (owner_id, viewer_id)
+);
+CREATE TABLE IF NOT EXISTS share_links (
+    token TEXT PRIMARY KEY,
+    owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created TEXT NOT NULL
+);
 """
 
 
@@ -178,3 +188,58 @@ class Store:
         with self._db() as c:
             cur = c.execute("DELETE FROM holidays WHERE id = ? AND user_id = ?", (holiday_id, user_id))
             return cur.rowcount > 0
+
+    # --- sharing ----------------------------------------------------------
+
+    def user_by_name(self, username):
+        with self._db() as c:
+            row = c.execute("SELECT id, username FROM users WHERE username = ?",
+                            (str(username or "").strip(),)).fetchone()
+        return dict(row) if row else None
+
+    def add_share(self, owner_id, viewer_id):
+        with self._db() as c:
+            c.execute("INSERT OR IGNORE INTO shares VALUES (?, ?)", (owner_id, viewer_id))
+
+    def remove_share(self, owner_id, viewer_id):
+        with self._db() as c:
+            return c.execute("DELETE FROM shares WHERE owner_id = ? AND viewer_id = ?",
+                             (owner_id, viewer_id)).rowcount > 0
+
+    def can_view(self, viewer_id, owner_id):
+        with self._db() as c:
+            return c.execute("SELECT 1 FROM shares WHERE owner_id = ? AND viewer_id = ?",
+                             (owner_id, viewer_id)).fetchone() is not None
+
+    def shares_for(self, user_id):
+        """(people I share with, people who share with me) as sorted username lists."""
+        with self._db() as c:
+            mine = c.execute("SELECT u.username FROM shares s JOIN users u ON u.id = s.viewer_id "
+                             "WHERE s.owner_id = ? ORDER BY u.username COLLATE NOCASE", (user_id,)).fetchall()
+            theirs = c.execute("SELECT u.username FROM shares s JOIN users u ON u.id = s.owner_id "
+                               "WHERE s.viewer_id = ? ORDER BY u.username COLLATE NOCASE", (user_id,)).fetchall()
+        return [r[0] for r in mine], [r[0] for r in theirs]
+
+    def create_link(self, owner_id):
+        token = secrets.token_urlsafe(12)
+        created = dt.date.today().isoformat()
+        with self._db() as c:
+            c.execute("INSERT INTO share_links VALUES (?, ?, ?)", (token, owner_id, created))
+        return {"token": token, "created": created}
+
+    def links_for(self, owner_id):
+        with self._db() as c:
+            rows = c.execute("SELECT token, created FROM share_links WHERE owner_id = ? ORDER BY created",
+                             (owner_id,)).fetchall()
+        return [dict(r) for r in rows]
+
+    def delete_link(self, owner_id, token):
+        with self._db() as c:
+            return c.execute("DELETE FROM share_links WHERE token = ? AND owner_id = ?",
+                             (token, owner_id)).rowcount > 0
+
+    def link_owner(self, token):
+        with self._db() as c:
+            row = c.execute("SELECT u.id, u.username FROM share_links l JOIN users u ON u.id = l.owner_id "
+                            "WHERE l.token = ?", (token,)).fetchone()
+        return dict(row) if row else None
