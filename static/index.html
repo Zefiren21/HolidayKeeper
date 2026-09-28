@@ -1,0 +1,524 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0f766e">
+  <title>HolidayKeeper</title>
+  <style>
+    :root {
+      --bg: #f4f6f5; --card: #ffffff; --text: #1a2421; --muted: #5f6f6a;
+      --accent: #0f766e; --on-accent: #ffffff; --accent-soft: #d5ede9; --danger: #b42318;
+      --border: #dfe5e3; --warn-soft: #fdf0d5; --warn: #93600a;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #111716; --card: #1a2220; --text: #e7eeec; --muted: #93a39e;
+        --accent: #2dd4bf; --on-accent: #062521; --accent-soft: #173a36; --danger: #f97066;
+        --border: #2a3532; --warn-soft: #3a2e14; --warn: #f5c261;
+      }
+    }
+    * { box-sizing: border-box; }
+    [hidden] { display: none !important; }
+    body {
+      margin: 0; background: var(--bg); color: var(--text);
+      font: 16px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      padding: env(safe-area-inset-top) 16px calc(32px + env(safe-area-inset-bottom));
+    }
+    main { max-width: 560px; margin: 0 auto; }
+    header { display: flex; align-items: center; gap: 8px; margin: 18px 0 16px; }
+    header h1 { font-size: 1.35rem; margin: 0; flex: 1; }
+    header button, header span { white-space: nowrap; }
+    header span { overflow: hidden; text-overflow: ellipsis; max-width: 30vw; }
+    h2 { font-size: .95rem; color: var(--muted); margin: 24px 0 8px; font-weight: 600; }
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 16px; }
+    form, .stack { display: grid; gap: 12px; }
+    label { display: grid; gap: 4px; font-size: .875rem; color: var(--muted); }
+    label.check { display: flex; align-items: center; gap: 8px; color: var(--text); font-size: .95rem; }
+    input, textarea, select {
+      font: inherit; color: var(--text); background: var(--bg); min-width: 0;
+      border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; width: 100%;
+    }
+    input[type=checkbox] { width: 20px; height: 20px; accent-color: var(--accent); flex: none; }
+    textarea { resize: vertical; }
+    .row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
+    button {
+      font: inherit; font-weight: 600; border: 0; border-radius: 10px; padding: 11px 14px;
+      background: var(--accent); color: var(--on-accent); cursor: pointer;
+    }
+    button.ghost { background: transparent; color: var(--accent); padding: 8px 10px; }
+    button.small { padding: 6px 10px; font-size: .85rem; }
+    button:disabled { opacity: .5; cursor: default; }
+    .error { color: var(--danger); font-size: .875rem; margin: 0; }
+    .error:empty { display: none; }
+    .muted { color: var(--muted); font-size: .875rem; }
+    ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
+    li.card { display: flex; gap: 14px; align-items: center; padding: 12px 14px; }
+    .count {
+      flex: 0 0 60px; height: 60px; border-radius: 12px; background: var(--accent-soft); color: var(--accent);
+      display: grid; place-content: center; text-align: center; line-height: 1.1;
+    }
+    .count b { font-size: 1.3rem; }
+    .count small { font-size: .68rem; }
+    .info { flex: 1; min-width: 0; }
+    .info strong { display: block; overflow-wrap: anywhere; }
+    .info .meta { color: var(--muted); font-size: .85rem; overflow-wrap: anywhere; }
+    .tag { display: inline-block; font-size: .72rem; font-weight: 600; padding: 1px 7px; border-radius: 99px;
+           background: var(--warn-soft); color: var(--warn); margin-left: 4px; vertical-align: 1px; }
+    .del { background: transparent; color: var(--muted); padding: 8px; font-size: 1.25rem; line-height: 1; }
+    .past { opacity: .6; }
+    .empty { color: var(--muted); text-align: center; padding: 12px 0; font-size: .9rem; }
+
+    .yearnav { display: flex; align-items: center; justify-content: center; gap: 12px; margin-bottom: 12px; }
+    .yearnav b { font-size: 1.15rem; min-width: 4ch; text-align: center; }
+    .summary { display: grid; gap: 10px; }
+    .big { display: flex; align-items: baseline; gap: 8px; }
+    .big b { font-size: 2.4rem; line-height: 1; color: var(--accent); }
+    .bar { height: 10px; border-radius: 99px; background: var(--bg); overflow: hidden; display: flex; }
+    .bar span:first-child { background: var(--accent); }
+    .bar span:last-child { background: var(--accent); opacity: .4; }
+    .stats { display: grid; grid-template-columns: repeat(3, 1fr); text-align: center; }
+    .stats b { display: block; font-size: 1.1rem; }
+    .over b { color: var(--danger); }
+
+    details.card { padding: 0; }
+    details.card > summary { padding: 14px 16px; cursor: pointer; font-weight: 600; list-style: none; }
+    details.card > summary::after { content: "▾"; float: right; color: var(--muted); }
+    details.card[open] > summary::after { content: "▴"; }
+    details.card > .stack { padding: 0 16px 16px; }
+    .bank li { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid var(--border); }
+    .bank li:first-child { border-top: 0; }
+    .bank .info { font-size: .92rem; }
+    .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+    .chip { display: inline-flex; align-items: center; gap: 4px; background: var(--accent-soft); color: var(--text);
+            border-radius: 99px; padding: 4px 4px 4px 10px; font-size: .88rem; }
+    .chip button { background: transparent; color: var(--muted); padding: 0 6px; }
+    .days { display: flex; flex-wrap: wrap; gap: 6px; }
+    .days label { display: flex; gap: 4px; align-items: center; color: var(--text); background: var(--bg);
+                  border: 1px solid var(--border); border-radius: 8px; padding: 6px 8px; }
+    .days input { width: 16px; height: 16px; }
+    .preview li { display: flex; gap: 10px; align-items: center; font-size: .92rem; }
+    .auth { max-width: 360px; margin: 12vh auto 0; }
+    .auth h1 { margin: 0 0 4px; }
+  </style>
+</head>
+<body>
+<main>
+  <!-- Login / sign up -->
+  <section id="authView" class="auth" hidden>
+    <h1>HolidayKeeper</h1>
+    <p class="muted">Log in or create an account for yourself or anyone in the house.</p>
+    <form id="authForm" class="card">
+      <label>Username <input id="authUser" autocomplete="username" required maxlength="32"></label>
+      <label>Password <input id="authPass" type="password" autocomplete="current-password" required minlength="6"></label>
+      <p class="error" id="authError"></p>
+      <div class="row">
+        <button type="submit" data-action="login">Log in</button>
+        <button type="submit" data-action="register" class="ghost">Create account</button>
+      </div>
+    </form>
+  </section>
+
+  <!-- App -->
+  <section id="appView" hidden>
+    <header>
+      <h1>HolidayKeeper</h1>
+      <span class="muted" id="who"></span>
+      <button class="ghost small" id="settingsBtn">Settings</button>
+      <button class="ghost small" id="logoutBtn">Log out</button>
+    </header>
+
+    <!-- Settings -->
+    <form id="settingsForm" class="card" hidden>
+      <strong>Settings</strong>
+      <label>Holiday allowance per year (days)
+        <input id="sAllowance" type="number" min="0" max="366" step="0.5" inputmode="decimal" required>
+      </label>
+      <div>
+        <div class="muted">Days I work</div>
+        <div class="days" id="sWorkDays"></div>
+      </div>
+      <div class="stack" style="gap:8px">
+        <div class="muted">Mandatory days off (added automatically every year)</div>
+        <div class="chips" id="sMandatory"></div>
+        <div class="row">
+          <input id="sMandatoryNew" type="date" aria-label="Add a mandatory day">
+          <button type="button" class="ghost" id="sMandatoryAdd">+ Add day</button>
+        </div>
+        <label class="check"><input type="checkbox" id="sMandatoryCounts"> Mandatory days come out of my allowance</label>
+      </div>
+      <label>Bank holidays for <select id="sRegion"></select></label>
+      <label class="check"><input type="checkbox" id="sBankOff"> My job gives bank holidays off (not taken from allowance)</label>
+      <label>My name in shared calendars
+        <input id="sCalName" maxlength="100" placeholder="e.g. Alex Smith">
+      </label>
+      <label>Google Calendar secret iCal link (optional)
+        <input id="sIcs" type="url" placeholder="https://calendar.google.com/calendar/ical/…/basic.ics">
+      </label>
+      <p class="muted" style="margin:0">Google Calendar → Settings → pick the calendar → “Integrate calendar” →
+        copy “Secret address in iCal format”.</p>
+      <p class="error" id="settingsError"></p>
+      <div class="row">
+        <button type="button" class="ghost" id="settingsCancel">Cancel</button>
+        <button type="submit">Save</button>
+      </div>
+    </form>
+
+    <div class="yearnav">
+      <button class="ghost" id="prevYear" aria-label="Previous year">‹</button>
+      <b id="yearLabel"></b>
+      <button class="ghost" id="nextYear" aria-label="Next year">›</button>
+    </div>
+
+    <div class="card summary" id="summary">
+      <div class="big"><b id="remaining"></b><span class="muted" id="remainingLabel"></span></div>
+      <div class="bar"><span id="barTaken"></span><span id="barBooked"></span></div>
+      <div class="stats">
+        <div><b id="taken"></b><span class="muted">taken</span></div>
+        <div><b id="booked"></b><span class="muted">booked</span></div>
+        <div><b id="allowance"></b><span class="muted">allowance</span></div>
+      </div>
+    </div>
+
+    <h2>Add holiday</h2>
+    <form id="addForm" class="card">
+      <label>Name <input id="name" required maxlength="100" placeholder="Summer in Lisbon"></label>
+      <div class="row">
+        <label>Start <input id="start" type="date" required></label>
+        <label>End <input id="end" type="date"></label>
+      </div>
+      <label>Length
+        <select id="portion">
+          <option value="full">Full days</option>
+          <option value="am">Half day – morning</option>
+          <option value="pm">Half day – afternoon</option>
+        </select>
+      </label>
+      <label>Note <input id="note" maxlength="500" placeholder="Optional"></label>
+      <p class="error" id="addError"></p>
+      <button type="submit">Add holiday</button>
+    </form>
+
+    <h2>Upcoming</h2>
+    <ul id="upcoming"></ul>
+    <h2 id="pastTitle">Earlier this year</h2>
+    <ul id="past"></ul>
+
+    <h2 id="bankTitle">UK bank holidays</h2>
+    <div class="card"><ul class="bank" id="bank"></ul></div>
+
+    <h2>Import from Google Calendar</h2>
+    <details class="card" id="importBox">
+      <summary>Import holidays</summary>
+      <div class="stack">
+        <label>Only events containing this name
+          <input id="impName" maxlength="100" placeholder="Leave empty to import every event">
+        </label>
+        <label>Calendar file (.ics, or agenda copied into a .txt)
+          <input id="impFile" type="file" accept=".ics,.txt,text/calendar,text/plain">
+        </label>
+        <label>…or paste the agenda text
+          <textarea id="impText" rows="4" placeholder="9&#10;Jan 2026, Fri&#10;All day&#10;Alex Smith (Day 1/4)"></textarea>
+        </label>
+        <div class="row">
+          <button type="button" id="impPreview">Preview</button>
+          <button type="button" class="ghost" id="impGoogle">Sync Google link</button>
+        </div>
+        <p class="error" id="impError"></p>
+        <div id="impResult" hidden class="stack">
+          <ul class="preview" id="impList"></ul>
+          <button type="button" id="impCommit">Import selected</button>
+        </div>
+      </div>
+    </details>
+  </section>
+</main>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+  const DAY = 86400000;
+  const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+  const state = { me: null, holidays: [], summary: null, year: null, mandatory: [], importItems: [] };
+
+  async function api(method, path, body) {
+    const opts = { method, headers: {} };
+    if (body !== undefined) {
+      opts.headers["Content-Type"] = "application/json";
+      opts.body = JSON.stringify(body);
+    }
+    const res = await fetch(path, opts);
+    const data = await res.json().catch(() => ({}));
+    if (res.status === 401 && path !== "/api/login") { showAuth(); throw new Error(data.error || "please log in"); }
+    if (!res.ok) throw new Error(data.error || `request failed (${res.status})`);
+    return data;
+  }
+
+  const parseDate = (s) => { const [y, m, d] = s.split("-").map(Number); return new Date(y, m - 1, d); };
+  const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const today = () => state.me ? parseDate(state.me.today) : new Date(new Date().toDateString());
+  const fmt = (s, withYear = false) => parseDate(s).toLocaleDateString(undefined,
+    { weekday: "short", day: "numeric", month: "short", ...(withYear ? { year: "numeric" } : {}) });
+  const num = (n) => Number.isInteger(n) ? String(n) : n.toFixed(1);
+  const plural = (n, word) => `${num(n)} ${word}${n === 1 ? "" : "s"}`;
+  function el(tag, { dataset, ...props } = {}, ...children) {
+    const e = Object.assign(document.createElement(tag), props);
+    Object.assign(e.dataset, dataset);
+    e.append(...children.filter(c => c !== null && c !== undefined));
+    return e;
+  }
+
+  // ---- auth ----------------------------------------------------------------
+  function showAuth() {
+    state.me = null;
+    $("appView").hidden = true;
+    $("authView").hidden = false;
+  }
+
+  $("authForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const action = e.submitter?.dataset.action || "login";
+    $("authError").textContent = "";
+    try {
+      await api("POST", `/api/${action}`, { username: $("authUser").value, password: $("authPass").value });
+      $("authPass").value = "";
+      boot();
+    } catch (err) { $("authError").textContent = err.message; }
+  });
+
+  $("logoutBtn").onclick = async () => { await api("POST", "/api/logout", {}); showAuth(); };
+
+  async function boot() {
+    try { state.me = await api("GET", "/api/me"); } catch { return; }
+    state.year = state.year || today().getFullYear();
+    $("who").textContent = state.me.username;
+    $("impName").value = state.me.settings.calendar_name;
+    $("authView").hidden = true;
+    $("appView").hidden = false;
+    refresh();
+  }
+
+  // ---- data ----------------------------------------------------------------
+  async function refresh() {
+    const [holidays, summary] = await Promise.all([
+      api("GET", "/api/holidays"), api("GET", `/api/summary?year=${state.year}`)]);
+    state.holidays = holidays;
+    state.summary = summary;
+    render();
+  }
+
+  function render() {
+    const s = state.summary, y = state.year;
+    $("yearLabel").textContent = y;
+    $("remaining").textContent = num(s.remaining);
+    $("remainingLabel").textContent = s.remaining === 1 ? "day left" : "days left";
+    $("summary").classList.toggle("over", s.remaining < 0);
+    $("taken").textContent = num(s.taken);
+    $("booked").textContent = num(s.booked);
+    $("allowance").textContent = num(s.allowance);
+    const pct = (n) => s.allowance ? Math.min(100, n / s.allowance * 100) + "%" : "0";
+    $("barTaken").style.width = pct(s.taken);
+    $("barBooked").style.width = pct(s.booked);
+
+    // Holidays touching this year, plus mandatory days as read-only entries.
+    const t = today(), first = `${y}-01-01`, last = `${y}-12-31`;
+    const items = state.holidays.filter(h => h.start <= last && h.end >= first).map(h => ({ ...h }));
+    for (const m of s.mandatory) {
+      items.push({ name: m.name, start: m.date, end: m.date, mandatory: true, counts: m.counts, portion: "full" });
+    }
+    items.sort((a, b) => a.start.localeCompare(b.start));
+    const upcoming = items.filter(h => parseDate(h.end) >= t);
+    const past = items.filter(h => parseDate(h.end) < t).reverse();
+    fillList($("upcoming"), upcoming, false, "Nothing planned — add a holiday above.");
+    fillList($("past"), past, true, null);
+    $("pastTitle").hidden = past.length === 0;
+
+    $("bankTitle").textContent = `UK bank holidays ${y} · ${s.bank_region}`;
+    $("bank").replaceChildren(...s.bank_holidays.map(bankRow));
+  }
+
+  function badge(h) {
+    const t = today(), start = parseDate(h.start), end = parseDate(h.end);
+    if (t < start) {
+      const n = Math.round((start - t) / DAY);
+      return [String(n), n === 1 ? "day to go" : "days to go"];
+    }
+    if (t <= end) return ["🌴", "now!"];
+    return ["✓", "done"];
+  }
+
+  function fillList(ul, items, isPast, emptyText) {
+    if (!items.length) {
+      ul.replaceChildren(...(emptyText ? [el("li", { className: "empty", textContent: emptyText })] : []));
+      return;
+    }
+    ul.replaceChildren(...items.map(h => {
+      const [big, small] = badge(h);
+      const span = h.start === h.end ? fmt(h.start) : `${fmt(h.start)} – ${fmt(h.end, h.start.slice(0, 4) !== h.end.slice(0, 4))}`;
+      let uses;
+      if (h.mandatory) uses = h.counts ? "uses 1 day" : "not counted";
+      else uses = h.portion !== "full" ? `half day (${h.portion.toUpperCase()}) · uses 0.5 days` : `uses ${plural(h.days, "day")}`;
+      const title = el("strong", {}, h.name, h.mandatory ? el("span", { className: "tag", textContent: "Mandatory" }) : null);
+      const del = h.mandatory ? null : el("button", { className: "del", ariaLabel: "Delete", textContent: "×",
+        onclick: () => removeHoliday(h) });
+      return el("li", { className: "card" + (isPast ? " past" : "") },
+        el("div", { className: "count" }, el("b", { textContent: big }), el("small", { textContent: small })),
+        el("div", { className: "info" }, title,
+          el("div", { className: "meta", textContent: `${span} · ${uses}` }),
+          h.note ? el("div", { className: "meta", textContent: h.note }) : null),
+        del);
+    }));
+  }
+
+  function bankRow(b) {
+    let action;
+    if (b.status === "available") {
+      action = el("button", { className: "small", textContent: "+ Add", onclick: async (e) => {
+        e.target.disabled = true;
+        try { await api("POST", "/api/holidays", { name: b.name, start: b.date, end: b.date, note: "Bank holiday" }); }
+        finally { refresh(); }
+      } });
+    } else {
+      const labels = { off: "Day off", booked: "Booked", mandatory: "Mandatory" };
+      action = el("span", { className: "muted", textContent: labels[b.status] });
+    }
+    return el("li", {}, el("div", { className: "info" }, el("strong", { textContent: b.name }),
+      el("div", { className: "meta", textContent: fmt(b.date) })), action);
+  }
+
+  async function removeHoliday(h) {
+    if (!confirm(`Delete "${h.name}"?`)) return;
+    await api("DELETE", `/api/holidays/${h.id}`);
+    refresh();
+  }
+
+  $("prevYear").onclick = () => { state.year--; refresh(); };
+  $("nextYear").onclick = () => { state.year++; refresh(); };
+
+  // ---- add form ------------------------------------------------------------
+  function syncPortion() {
+    const half = $("portion").value !== "full";
+    $("end").disabled = half;
+    if (half) $("end").value = $("start").value;
+  }
+  $("portion").addEventListener("change", syncPortion);
+  $("start").addEventListener("change", () => {
+    if (!$("end").value || $("end").value < $("start").value || $("portion").value !== "full") $("end").value = $("start").value;
+  });
+
+  $("addForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    $("addError").textContent = "";
+    try {
+      const h = await api("POST", "/api/holidays", {
+        name: $("name").value, start: $("start").value, end: $("end").value,
+        portion: $("portion").value, note: $("note").value });
+      $("addForm").reset();
+      syncPortion();
+      state.year = parseDate(h.start).getFullYear();
+      refresh();
+    } catch (err) { $("addError").textContent = err.message; }
+  });
+
+  // ---- settings ------------------------------------------------------------
+  $("settingsBtn").onclick = () => {
+    const s = state.me.settings;
+    $("sAllowance").value = s.allowance;
+    $("sWorkDays").replaceChildren(...WEEKDAYS.map((d, i) =>
+      el("label", {}, el("input", { type: "checkbox", value: i, checked: s.work_days.includes(i) }), d)));
+    state.mandatory = [...s.mandatory_days];
+    renderMandatory();
+    $("sMandatoryCounts").checked = s.mandatory_counts;
+    $("sRegion").replaceChildren(...Object.entries(state.me.regions).map(([k, v]) =>
+      el("option", { value: k, textContent: v, selected: k === s.bank_region })));
+    $("sBankOff").checked = s.bank_holidays_off;
+    $("sCalName").value = s.calendar_name;
+    $("sIcs").value = s.ics_url;
+    $("settingsError").textContent = "";
+    $("settingsForm").hidden = false;
+    $("settingsForm").scrollIntoView({ behavior: "smooth" });
+  };
+  $("settingsCancel").onclick = () => { $("settingsForm").hidden = true; };
+
+  function renderMandatory() {
+    const label = (mmdd) => new Date(2000, +mmdd.slice(0, 2) - 1, +mmdd.slice(3)).toLocaleDateString(undefined, { day: "numeric", month: "short" });
+    $("sMandatory").replaceChildren(...state.mandatory.map(m => el("span", { className: "chip" }, label(m),
+      el("button", { type: "button", ariaLabel: "Remove", textContent: "×",
+        onclick: () => { state.mandatory = state.mandatory.filter(x => x !== m); renderMandatory(); } }))));
+    if (!state.mandatory.length) $("sMandatory").append(el("span", { className: "muted", textContent: "None" }));
+  }
+  $("sMandatoryAdd").onclick = () => {
+    const v = $("sMandatoryNew").value;
+    if (!v) return;
+    const mmdd = v.slice(5);
+    if (!state.mandatory.includes(mmdd)) state.mandatory = [...state.mandatory, mmdd].sort();
+    $("sMandatoryNew").value = "";
+    renderMandatory();
+  };
+
+  $("settingsForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    $("settingsError").textContent = "";
+    try {
+      state.me.settings = await api("PUT", "/api/settings", {
+        allowance: Number($("sAllowance").value),
+        work_days: [...$("sWorkDays").querySelectorAll("input:checked")].map(i => Number(i.value)),
+        mandatory_days: state.mandatory,
+        mandatory_counts: $("sMandatoryCounts").checked,
+        bank_region: $("sRegion").value,
+        bank_holidays_off: $("sBankOff").checked,
+        calendar_name: $("sCalName").value,
+        ics_url: $("sIcs").value,
+      });
+      $("impName").value = state.me.settings.calendar_name;
+      $("settingsForm").hidden = true;
+      refresh();
+    } catch (err) { $("settingsError").textContent = err.message; }
+  });
+
+  // ---- import --------------------------------------------------------------
+  $("impFile").addEventListener("change", async () => {
+    const f = $("impFile").files[0];
+    if (f) $("impText").value = await f.text();
+  });
+
+  async function preview(body) {
+    $("impError").textContent = "";
+    $("impResult").hidden = true;
+    try {
+      const res = await api("POST", "/api/import/preview", { ...body, name: $("impName").value });
+      state.importItems = res.items;
+      if (!res.items.length) { $("impError").textContent = "No matching events found."; return; }
+      $("impList").replaceChildren(...res.items.map((it, i) => {
+        const span = it.start === it.end ? fmt(it.start, true) : `${fmt(it.start)} – ${fmt(it.end, true)}`;
+        const what = it.portion !== "full" ? `half day (${it.portion.toUpperCase()})` : plural(it.days, "day");
+        return el("li", {}, el("input", { type: "checkbox", checked: !it.duplicate, dataset: { i } }),
+          el("div", { className: "info" }, el("strong", { textContent: it.name }),
+            el("div", { className: "meta", textContent: `${span} · ${what}` + (it.duplicate ? " · already added" : "") })));
+      }));
+      $("impResult").hidden = false;
+    } catch (err) { $("impError").textContent = err.message; }
+  }
+  $("impPreview").onclick = () => {
+    if (!$("impText").value.trim()) { $("impError").textContent = "Choose a file or paste some text first."; return; }
+    preview({ text: $("impText").value });
+  };
+  $("impGoogle").onclick = () => preview({ source: "google" });
+
+  $("impCommit").onclick = async () => {
+    const chosen = [...$("impList").querySelectorAll("input:checked")].map(c => state.importItems[c.dataset.i]);
+    if (!chosen.length) return;
+    try {
+      await api("POST", "/api/holidays", { items: chosen });
+      $("impResult").hidden = true;
+      $("impText").value = "";
+      $("impFile").value = "";
+      $("impError").textContent = "";
+      refresh();
+    } catch (err) { $("impError").textContent = err.message; }
+  };
+
+  boot().then(() => { if (!state.me) showAuth(); });
+  setInterval(() => { if (state.me && document.visibilityState === "visible") refresh(); }, 60000);
+</script>
+</body>
+</html>
