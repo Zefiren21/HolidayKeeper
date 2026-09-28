@@ -98,6 +98,29 @@ test("pencilled holidays are counted separately", () => {
   assert.equal(status["2026-12-25"], "mandatory");
 });
 
+test("carry-over adds decimal days to that year only", () => {
+  const s = settings({ allowance: 30, mandatory_days: [], carry_over: { 2026: 0.765 } });
+  const y26 = yearSummary([mayWeek], s, 2026, "2026-01-01");
+  assert.deepEqual([y26.baseAllowance, y26.carryOver, y26.allowance, y26.remaining], [30, 0.765, 30.765, 25.765]);
+  const half = { name: "Half", start: "2026-06-01", end: "2026-06-01", portion: "am", status: "pencilled" };
+  assert.equal(yearSummary([mayWeek, half], s, 2026, "2026-01-01").remainingIfPencilled, 25.265);
+  const y27 = yearSummary([], s, 2027, "2026-01-01");
+  assert.deepEqual([y27.carryOver, y27.allowance], [0, 30]);
+  // Floating-point noise is rounded away: 0.1 + 0.2 style sums stay tidy.
+  const noisy = yearSummary([], settings({ allowance: 30, mandatory_days: [], carry_over: { 2026: 0.1 + 0.2 } }), 2026, "2026-01-01");
+  assert.equal(noisy.remaining, 30.3);
+  // Borrowed days reduce the allowance.
+  assert.equal(yearSummary([], settings({ mandatory_days: [], carry_over: { 2026: -1.25 } }), 2026, "2026-01-01").allowance, 23.75);
+});
+
+test("carry-over validation", () => {
+  const s = validateSettings({ carry_over: { 2026: "0.765", 2025: "", 2024: 0, 2023: 1.23456 } }, DEFAULT_SETTINGS);
+  assert.deepEqual(s.carry_over, { 2026: 0.765, 2023: 1.235 });
+  for (const bad of [{ carry_over: { 26: 1 } }, { carry_over: { 2026: "lots" } }, { carry_over: { 2026: 400 } }, { carry_over: [1] }]) {
+    assert.throws(() => validateSettings(bad, DEFAULT_SETTINGS), undefined, JSON.stringify(bad));
+  }
+});
+
 test("day map colours", () => {
   const pencil = { name: "Maybe", start: "2026-07-06", end: "2026-07-06", portion: "am", status: "pencilled" };
   const m = dayMap([mayWeek, pencil], settings(), 2026, "2026-05-06");

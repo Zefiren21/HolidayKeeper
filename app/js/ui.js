@@ -11,7 +11,8 @@ export function el(tag, { dataset, ...props } = {}, ...children) {
   return e;
 }
 
-export const num = (n) => (Number.isInteger(n) ? String(n) : n.toFixed(1));
+/** 30 -> "30", 13.5 -> "13.5", 0.765 -> "0.765" (at most 3 decimals, no trailing zeros). */
+export const num = (n) => String(Math.round(n * 1000) / 1000);
 export const plural = (n, word) => `${num(n)} ${word}${n === 1 ? "" : "s"}`;
 
 const fmtOpts = { timeZone: "UTC", weekday: "short", day: "numeric", month: "short" };

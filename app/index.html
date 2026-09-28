@@ -38,6 +38,13 @@
     <label>Holiday allowance per year (days)
       <input id="sAllowance" type="number" min="0" max="366" step="0.5" inputmode="decimal" required>
     </label>
+    <div class="stack" style="gap:6px">
+      <label>Carried over into <span id="sCarryYear"></span> (days, decimals allowed)
+        <input id="sCarry" type="text" inputmode="decimal" placeholder="0" autocomplete="off">
+      </label>
+      <button type="button" class="ghost small" id="sCarryFill" style="justify-self:start" hidden></button>
+      <span class="muted">Change year with ‹ › below to set other years.</span>
+    </div>
     <div>
       <div class="muted">Days I work</div>
       <div class="days" id="sWorkDays"></div>
@@ -72,6 +79,7 @@
 
   <section class="card summary" id="summary">
     <div class="big"><b id="remaining"></b><span class="muted" id="remainingLabel"></span></div>
+    <p class="muted" id="carryLine" style="margin:0" hidden></p>
     <p class="if-pencilled" id="ifPencilled" hidden></p>
     <div class="bar" aria-hidden="true"><span class="b-taken" id="barTaken"></span><span class="b-booked" id="barBooked"></span><span class="b-pencilled" id="barPencilled"></span></div>
     <div class="stats">
