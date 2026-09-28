@@ -1,0 +1,57 @@
+name: Phone app
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Unit tests
+        run: node --test app/tests/*.test.mjs
+      - name: Install Chromium for the browser test
+        run: |
+          npm install --no-save playwright@1
+          npx playwright install --with-deps chromium
+      - name: Browser test (phone-sized)
+        run: SHOTS=e2e-screenshots node app/tests/e2e.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: phone-app-screenshots
+          path: e2e-screenshots
+          if-no-files-found: ignore
+
+  deploy:
+    # Publishes app/ to GitHub Pages. One-time setup: Settings → Pages → Source: "GitHub Actions".
+    needs: test
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Collect site files
+        run: |
+          mkdir _site
+          cp -r app/. _site/
+          rm -rf _site/tests
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deployment
+        uses: actions/deploy-pages@v4
