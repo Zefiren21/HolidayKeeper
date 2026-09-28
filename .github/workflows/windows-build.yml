@@ -1,0 +1,57 @@
+name: Windows build
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: write  # to publish the "latest" release from main
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run tests on Windows
+        run: python -m unittest discover -s tests -t .
+
+      - name: Build HolidayKeeper.exe
+        run: |
+          pip install "pyinstaller>=6,<7"
+          pyinstaller --noconfirm HolidayKeeper.spec
+
+      - name: Smoke test the exe
+        shell: pwsh
+        run: |
+          $p = Start-Process dist\HolidayKeeper.exe -PassThru `
+            -ArgumentList "--no-browser", "--port", "8123", "--data", "$env:RUNNER_TEMP\hk"
+          $ok = $false
+          foreach ($i in 1..30) {
+            Start-Sleep -Seconds 1
+            try {
+              $r = Invoke-WebRequest http://localhost:8123/ -UseBasicParsing
+              if ($r.Content -match "HolidayKeeper") { $ok = $true; break }
+            } catch {}
+          }
+          taskkill /F /T /PID $p.Id | Out-Null
+          if (-not $ok) { throw "HolidayKeeper.exe did not serve the app" }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: HolidayKeeper-windows
+          path: dist/HolidayKeeper.exe
+
+      - name: Publish as the "latest" release
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete latest --cleanup-tag --yes || true
+          gh release create latest dist/HolidayKeeper.exe --target "$GITHUB_SHA" \
+            --title "HolidayKeeper for Windows" \
+            --notes "Download HolidayKeeper.exe and double-click it. Built from $GITHUB_SHA."

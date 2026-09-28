@@ -27,8 +27,8 @@
     }
     main { max-width: 560px; margin: 0 auto; }
     header { display: flex; align-items: center; gap: 8px; margin: 18px 0 16px; }
-    header h1 { font-size: 1.35rem; margin: 0; flex: 1; }
-    header button, header span { white-space: nowrap; }
+    header h1 { font-size: 1.35rem; margin: 0; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    header button, header span { white-space: nowrap; flex: none; }
     header span { overflow: hidden; text-overflow: ellipsis; max-width: 30vw; }
     h2 { font-size: .95rem; color: var(--muted); margin: 24px 0 8px; font-weight: 600; }
     .card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 16px; }
@@ -98,6 +98,14 @@
                   border: 1px solid var(--border); border-radius: 8px; padding: 6px 8px; }
     .days input { width: 16px; height: 16px; }
     .preview li { display: flex; gap: 10px; align-items: center; font-size: .92rem; }
+    .viewing { margin: 0 0 14px; }
+    .viewing select { font-weight: 600; }
+    .links li { display: grid; gap: 8px; padding: 10px 0; border-top: 1px solid var(--border); }
+    .links li:first-child { border-top: 0; }
+    .links input { font-size: .85rem; padding: 8px 10px; }
+    .actions { display: flex; flex-wrap: wrap; gap: 6px; }
+    a.btn { font-weight: 600; font-size: .85rem; border-radius: 10px; padding: 6px 10px; text-decoration: none;
+            background: var(--accent-soft); color: var(--accent); }
     .auth { max-width: 360px; margin: 12vh auto 0; }
     .auth h1 { margin: 0 0 4px; }
   </style>
@@ -124,9 +132,13 @@
     <header>
       <h1>HolidayKeeper</h1>
       <span class="muted" id="who"></span>
-      <button class="ghost small" id="settingsBtn">Settings</button>
+      <button class="ghost small own" id="settingsBtn">Settings</button>
       <button class="ghost small" id="logoutBtn">Log out</button>
     </header>
+
+    <label id="viewingBox" class="viewing" hidden>Showing
+      <select id="viewing"></select>
+    </label>
 
     <!-- Settings -->
     <form id="settingsForm" class="card" hidden>
@@ -180,8 +192,8 @@
       </div>
     </div>
 
-    <h2>Add holiday</h2>
-    <form id="addForm" class="card">
+    <h2 class="own">Add holiday</h2>
+    <form id="addForm" class="card own">
       <label>Name <input id="name" required maxlength="100" placeholder="Summer in Lisbon"></label>
       <div class="row">
         <label>Start <input id="start" type="date" required></label>
@@ -207,8 +219,8 @@
     <h2 id="bankTitle">UK bank holidays</h2>
     <div class="card"><ul class="bank" id="bank"></ul></div>
 
-    <h2>Import from Google Calendar</h2>
-    <details class="card" id="importBox">
+    <h2 class="own">Import from Google Calendar</h2>
+    <details class="card own" id="importBox">
       <summary>Import holidays</summary>
       <div class="stack">
         <label>Only events containing this name
@@ -231,6 +243,25 @@
         </div>
       </div>
     </details>
+
+    <h2 class="own">Sharing</h2>
+    <details class="card own" id="shareBox">
+      <summary>Share my holidays</summary>
+      <div class="stack">
+        <div class="muted">People with an account here who can see my holidays and allowance</div>
+        <div class="chips" id="sharePeople"></div>
+        <form id="shareForm" class="row">
+          <input id="shareUser" placeholder="Their username" maxlength="32" required>
+          <button type="submit">Share</button>
+        </form>
+        <p class="error" id="shareError"></p>
+        <div class="muted">Links anyone can open, no account needed (shows holiday dates only, no notes or allowance)</div>
+        <ul class="links" id="shareLinks"></ul>
+        <button type="button" class="ghost" id="linkCreate">+ Create a share link</button>
+        <p class="muted" style="margin:0">Links point at this laptop, so they only open on the same Wi-Fi
+          and only while HolidayKeeper is running.</p>
+      </div>
+    </details>
   </section>
 </main>
 
@@ -238,7 +269,8 @@
   const $ = (id) => document.getElementById(id);
   const DAY = 86400000;
   const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-  const state = { me: null, holidays: [], summary: null, year: null, mandatory: [], importItems: [] };
+  const state = { me: null, holidays: [], summary: null, year: null, mandatory: [], importItems: [],
+                  viewing: "", shares: { sharing_with: [], shared_with_me: [], links: [] } };
 
   async function api(method, path, body) {
     const opts = { method, headers: {} };
@@ -294,20 +326,35 @@
     $("impName").value = state.me.settings.calendar_name;
     $("authView").hidden = true;
     $("appView").hidden = false;
+    await loadShares();
     refresh();
   }
 
   // ---- data ----------------------------------------------------------------
   async function refresh() {
-    const [holidays, summary] = await Promise.all([
-      api("GET", "/api/holidays"), api("GET", `/api/summary?year=${state.year}`)]);
-    state.holidays = holidays;
-    state.summary = summary;
+    if (state.viewing) {
+      try {
+        const v = await api("GET", `/api/people/${encodeURIComponent(state.viewing)}?year=${state.year}`);
+        state.holidays = v.holidays;
+        state.summary = v.summary;
+      } catch {  // they stopped sharing
+        state.viewing = "";
+        await loadShares();
+        return refresh();
+      }
+    } else {
+      const [holidays, summary] = await Promise.all([
+        api("GET", "/api/holidays"), api("GET", `/api/summary?year=${state.year}`)]);
+      state.holidays = holidays;
+      state.summary = summary;
+    }
     render();
   }
 
   function render() {
     const s = state.summary, y = state.year;
+    document.querySelectorAll(".own").forEach(e => { e.hidden = !!state.viewing; });
+    if (state.viewing) $("settingsForm").hidden = true;
     $("yearLabel").textContent = y;
     $("remaining").textContent = num(s.remaining);
     $("remainingLabel").textContent = s.remaining === 1 ? "day left" : "days left";
@@ -358,7 +405,7 @@
       if (h.mandatory) uses = h.counts ? "uses 1 day" : "not counted";
       else uses = h.portion !== "full" ? `half day (${h.portion.toUpperCase()}) · uses 0.5 days` : `uses ${plural(h.days, "day")}`;
       const title = el("strong", {}, h.name, h.mandatory ? el("span", { className: "tag", textContent: "Mandatory" }) : null);
-      const del = h.mandatory ? null : el("button", { className: "del", ariaLabel: "Delete", textContent: "×",
+      const del = h.mandatory || state.viewing ? null : el("button", { className: "del", ariaLabel: "Delete", textContent: "×",
         onclick: () => removeHoliday(h) });
       return el("li", { className: "card" + (isPast ? " past" : "") },
         el("div", { className: "count" }, el("b", { textContent: big }), el("small", { textContent: small })),
@@ -371,7 +418,9 @@
 
   function bankRow(b) {
     let action;
-    if (b.status === "available") {
+    if (b.status === "available" && state.viewing) {
+      action = el("span", { className: "muted", textContent: "Working" });
+    } else if (b.status === "available") {
       action = el("button", { className: "small", textContent: "+ Add", onclick: async (e) => {
         e.target.disabled = true;
         try { await api("POST", "/api/holidays", { name: b.name, start: b.date, end: b.date, note: "Bank holiday" }); }
@@ -515,6 +564,76 @@
       $("impError").textContent = "";
       refresh();
     } catch (err) { $("impError").textContent = err.message; }
+  };
+
+  // ---- sharing -------------------------------------------------------------
+  async function loadShares() {
+    state.shares = await api("GET", "/api/shares");
+    renderShares();
+  }
+
+  $("viewing").onchange = () => { state.viewing = $("viewing").value; refresh(); };
+
+  async function copyText(text, input) {
+    try {
+      await navigator.clipboard.writeText(text);  // only available over HTTPS or on localhost
+    } catch {
+      input.select();
+      document.execCommand("copy");
+    }
+  }
+
+  function renderShares() {
+    const s = state.shares;
+    $("viewingBox").hidden = !s.shared_with_me.length;
+    $("viewing").replaceChildren(el("option", { value: "", textContent: "My holidays" }),
+      ...s.shared_with_me.map(u => el("option", { value: u, textContent: `${u}'s holidays` })));
+    $("viewing").value = state.viewing;
+
+    $("sharePeople").replaceChildren(...s.sharing_with.map(u => el("span", { className: "chip" }, u,
+      el("button", { type: "button", ariaLabel: `Stop sharing with ${u}`, textContent: "×", onclick: async () => {
+        if (!confirm(`Stop sharing your holidays with ${u}?`)) return;
+        state.shares = await api("DELETE", `/api/shares/${encodeURIComponent(u)}`);
+        renderShares();
+      } }))));
+    if (!s.sharing_with.length) $("sharePeople").append(el("span", { className: "muted", textContent: "Nobody yet" }));
+
+    $("shareLinks").replaceChildren(...s.links.map(l => {
+      const url = `${state.me.share_base}/s/${l.token}`;
+      const msg = encodeURIComponent(`My holidays: ${url}`);
+      const input = el("input", { value: url, readOnly: true, onclick: (e) => e.target.select() });
+      const copy = el("button", { type: "button", className: "small", textContent: "Copy", onclick: async () => {
+        await copyText(url, input);
+        copy.textContent = "Copied!";
+        setTimeout(() => { copy.textContent = "Copy"; }, 1500);
+      } });
+      const share = navigator.share ? el("button", { type: "button", className: "small", textContent: "Share…",
+        onclick: () => navigator.share({ title: "My holidays", url }).catch(() => {}) }) : null;
+      const off = el("button", { type: "button", className: "ghost small", textContent: "Turn off", onclick: async () => {
+        if (!confirm("Turn this link off? Anyone using it will lose access.")) return;
+        await api("DELETE", `/api/links/${l.token}`);
+        loadShares();
+      } });
+      return el("li", {}, input, el("div", { className: "actions" }, copy, share,
+        el("a", { className: "btn", href: `sms:?&body=${msg}`, textContent: "Text" }),
+        el("a", { className: "btn", href: `https://wa.me/?text=${msg}`, target: "_blank", rel: "noopener", textContent: "WhatsApp" }),
+        off));
+    }));
+  }
+
+  $("shareForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    $("shareError").textContent = "";
+    try {
+      state.shares = await api("POST", "/api/shares", { username: $("shareUser").value });
+      $("shareUser").value = "";
+      renderShares();
+    } catch (err) { $("shareError").textContent = err.message; }
+  });
+
+  $("linkCreate").onclick = async () => {
+    await api("POST", "/api/links", {});
+    loadShares();
   };
 
   boot().then(() => { if (!state.me) showAuth(); });

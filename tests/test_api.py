@@ -176,6 +176,55 @@ class ApiTest(unittest.TestCase):
         self.server.app.fetch_ics = broken
         self.assertEqual(c.post("/api/import/preview", {"source": "google"})[0], 502)
 
+    def test_share_with_another_user(self):
+        alice, bob, carol = self.user("alice"), self.user("bob"), self.user("carol smith")
+        alice.post("/api/holidays", {"name": "Rome", "start": "2026-07-06", "end": "2026-07-10",
+                                     "note": "private note"})
+        self.assertEqual(bob.get("/api/people/alice")[0], 404)  # not shared yet
+
+        self.assertEqual(alice.post("/api/shares", {"username": "nobody"})[0], 404)
+        self.assertEqual(alice.post("/api/shares", {"username": "alice"})[0], 400)
+        status, shares = alice.post("/api/shares", {"username": "BOB"})
+        self.assertEqual((status, shares["sharing_with"]), (200, ["bob"]))
+        self.assertEqual(bob.get("/api/shares")[1]["shared_with_me"], ["alice"])
+
+        status, view = bob.get("/api/people/alice?year=2026")
+        self.assertEqual(status, 200)
+        self.assertEqual([(h["name"], h["days"]) for h in view["holidays"]], [("Rome", 5)])
+        self.assertNotIn("note", view["holidays"][0])
+        self.assertEqual(view["summary"]["booked"], 5 + 1)  # Rome + 25 Dec
+        # Sharing is one way, and viewers can't change the owner's holidays.
+        self.assertEqual(alice.get("/api/people/bob")[0], 404)
+        self.assertEqual(carol.get("/api/people/alice")[0], 404)
+
+        alice.post("/api/shares", {"username": "carol smith"})
+        self.assertEqual(carol.get("/api/people/alice")[0], 200)
+        self.assertEqual(alice.request("DELETE", "/api/shares/carol%20smith")[0], 200)
+        self.assertEqual(carol.get("/api/people/alice")[0], 404)
+
+    def test_share_links(self):
+        alice = self.user("alice")
+        alice.post("/api/holidays", {"name": "Old", "start": "2025-07-06", "end": "2025-07-10"})
+        alice.post("/api/holidays", {"name": "Rome", "start": "2026-07-06", "end": "2026-07-10",
+                                     "note": "private note"})
+        status, link = alice.post("/api/links")
+        self.assertEqual(status, 201)
+        self.assertEqual(alice.get("/api/shares")[1]["links"][0]["token"], link["token"])
+        self.assertIn("share_base", alice.get("/api/me")[1])
+
+        stranger = Client(self.base)  # not logged in
+        status, page = stranger.get(f"/s/{link['token']}")
+        self.assertEqual(status, 200)
+        self.assertIn('id="sharePage"', page)
+        status, data = stranger.get(f"/api/public/{link['token']}")
+        self.assertEqual((status, data["username"]), (200, "alice"))
+        self.assertEqual([h["name"] for h in data["holidays"]], ["Rome"])  # past years hidden
+        self.assertNotIn("note", data["holidays"][0])
+
+        self.assertEqual(self.user("bob").request("DELETE", f"/api/links/{link['token']}")[0], 404)
+        self.assertEqual(alice.request("DELETE", f"/api/links/{link['token']}")[0], 200)
+        self.assertEqual(stranger.get(f"/api/public/{link['token']}")[0], 404)
+
     def test_first_user_inherits_legacy_holidays(self):
         with open(os.path.join(self.tmp, "holidays.json"), "w") as f:
             json.dump([{"id": "a", "name": "Old trip", "start": "2026-02-02", "end": "2026-02-03",

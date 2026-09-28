@@ -2,3 +2,5 @@ holidays.json
 holidays.json.*
 holidaykeeper.db*
 __pycache__/
+build/
+dist/

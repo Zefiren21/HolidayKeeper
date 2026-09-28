@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0f766e">
+  <title>Shared holidays</title>
+  <style>
+    :root {
+      --bg: #f4f6f5; --card: #ffffff; --text: #1a2421; --muted: #5f6f6a;
+      --accent: #0f766e; --accent-soft: #d5ede9; --border: #dfe5e3;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #111716; --card: #1a2220; --text: #e7eeec; --muted: #93a39e;
+        --accent: #2dd4bf; --accent-soft: #173a36; --border: #2a3532;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; background: var(--bg); color: var(--text);
+      font: 16px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      padding: env(safe-area-inset-top) 16px calc(32px + env(safe-area-inset-bottom));
+    }
+    main { max-width: 560px; margin: 0 auto; }
+    h1 { font-size: 1.4rem; margin: 22px 0 2px; overflow-wrap: anywhere; }
+    h2 { font-size: .95rem; color: var(--muted); margin: 24px 0 8px; font-weight: 600; }
+    .muted { color: var(--muted); font-size: .9rem; }
+    ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
+    li { display: flex; gap: 14px; align-items: center; background: var(--card);
+         border: 1px solid var(--border); border-radius: 14px; padding: 12px 14px; }
+    .count { flex: 0 0 60px; height: 60px; border-radius: 12px; background: var(--accent-soft); color: var(--accent);
+             display: grid; place-content: center; text-align: center; line-height: 1.1; }
+    .count b { font-size: 1.3rem; }
+    .count small { font-size: .68rem; }
+    .info { flex: 1; min-width: 0; }
+    .info strong { display: block; overflow-wrap: anywhere; }
+    .past { opacity: .6; }
+    .empty { justify-content: center; color: var(--muted); }
+    a { color: var(--accent); }
+  </style>
+</head>
+<body>
+<main id="sharePage">
+  <h1 id="title">Shared holidays</h1>
+  <p class="muted" id="sub">Loading…</p>
+  <h2>Coming up</h2>
+  <ul id="upcoming"></ul>
+  <h2 id="pastTitle" hidden>Earlier</h2>
+  <ul id="past"></ul>
+  <p class="muted" style="margin-top:28px">Shared from HolidayKeeper · <a href="/">open the app</a></p>
+</main>
+<script>
+  const $ = (id) => document.getElementById(id);
+  const DAY = 86400000;
+  const parseDate = (s) => { const [y, m, d] = s.split("-").map(Number); return new Date(y, m - 1, d); };
+  const fmt = (s) => parseDate(s).toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short", year: "numeric" });
+
+  function row(h, today, isPast) {
+    const start = parseDate(h.start), end = parseDate(h.end);
+    let big, small;
+    if (today < start) { const n = Math.round((start - today) / DAY); big = n; small = n === 1 ? "day to go" : "days to go"; }
+    else if (today <= end) { big = "🌴"; small = "now!"; }
+    else { big = "✓"; small = "done"; }
+    const li = document.createElement("li");
+    if (isPast) li.className = "past";
+    li.innerHTML = '<div class="count"><b></b><small></small></div><div class="info"><strong></strong><div class="muted"></div></div>';
+    li.querySelector("b").textContent = big;
+    li.querySelector("small").textContent = small;
+    li.querySelector("strong").textContent = h.name;
+    const half = h.portion !== "full" ? ` · half day (${h.portion.toUpperCase()})` : "";
+    li.querySelector(".muted").textContent = (h.start === h.end ? fmt(h.start) : `${fmt(h.start)} – ${fmt(h.end)}`) + half;
+    return li;
+  }
+
+  (async () => {
+    const token = location.pathname.split("/").pop();
+    const res = await fetch(`/api/public/${encodeURIComponent(token)}`);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      $("title").textContent = "Link not available";
+      $("sub").textContent = data.error || "This link doesn't work any more.";
+      $("upcoming").previousElementSibling.hidden = true;
+      return;
+    }
+    document.title = `${data.username}'s holidays`;
+    $("title").textContent = `${data.username}'s holidays`;
+    $("sub").textContent = "Read-only view, kept up to date.";
+    const today = parseDate(data.today);
+    const upcoming = data.holidays.filter(h => parseDate(h.end) >= today);
+    const past = data.holidays.filter(h => parseDate(h.end) < today).reverse();
+    $("upcoming").replaceChildren(...upcoming.map(h => row(h, today, false)));
+    if (!upcoming.length) $("upcoming").innerHTML = '<li class="empty">Nothing planned right now.</li>';
+    $("past").replaceChildren(...past.map(h => row(h, today, true)));
+    $("pastTitle").hidden = !past.length;
+  })();
+</script>
+</body>
+</html>
