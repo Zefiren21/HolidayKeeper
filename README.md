@@ -25,6 +25,10 @@ Add holidays in the installed app, not in Safari: iOS keeps their data separate.
 
 - **Allowance.** Set it in Settings. The summary shows days taken, booked and left.
   Only your working days count, and half days count as 0.5.
+- **Carry-over.** In Settings, enter the days carried into the year you're viewing.
+  Decimals are fine, e.g. 0.765. Tap "Use what was left in 2025" to fill it in from
+  last year. It's added to that year only, and the summary shows "Allowance 30 +
+  0.765 carried over". Change years with ‹ › to set other years.
 - **Pencilled-in holidays.** Choose *Pencilled in* when adding a holiday, or tap a day
   and pick **✎ Pencil in this day**. These plans don't touch your real numbers. The
   summary shows "X left if you take your pencilled-in days". Tap **Book it** once your

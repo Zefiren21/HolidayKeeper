@@ -21,7 +21,7 @@ function setPref(key, value) {
 }
 
 let state = load();
-const ui = { year: yearOf(localToday()), view: pref(PREFS.view, "list"), month: null, mandatory: [], importItems: [], picture: null };
+const ui = { year: yearOf(localToday()), view: pref(PREFS.view, "list"), month: null, mandatory: [], carry: {}, importItems: [], picture: null };
 const profile = () => active(state);
 let warnedStorage = false;
 
@@ -53,6 +53,10 @@ function render() {
   $("booked").textContent = num(s.booked);
   $("pencilled").textContent = num(s.pencilled);
   $("allowance").textContent = num(s.allowance);
+  $("carryLine").hidden = !s.carryOver;
+  $("carryLine").textContent = s.carryOver > 0
+    ? `Allowance ${num(s.baseAllowance)} + ${num(s.carryOver)} carried over from ${y - 1}`
+    : `Allowance ${num(s.baseAllowance)} − ${num(-s.carryOver)} borrowed`;
   const pct = (n) => (s.allowance ? `${Math.max(0, Math.min(100, (n / s.allowance) * 100))}%` : "0");
   $("barTaken").style.width = pct(s.taken);
   $("barBooked").style.width = pct(s.booked);
@@ -238,8 +242,14 @@ document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeSheet
 
 // ---- navigation -----------------------------------------------------------------------
 
-$("prevYear").onclick = () => { ui.year--; render(); };
-$("nextYear").onclick = () => { ui.year++; render(); };
+function changeYear(delta) {
+  if (!$("settingsForm").hidden) stashCarry();
+  ui.year += delta;
+  if (!$("settingsForm").hidden) showCarry();
+  render();
+}
+$("prevYear").onclick = () => changeYear(-1);
+$("nextYear").onclick = () => changeYear(1);
 for (const tab of [$("tabList"), $("tabCalendar")]) {
   tab.onclick = () => { ui.view = tab.dataset.view; setPref(PREFS.view, ui.view); render(); };
 }
@@ -300,6 +310,8 @@ $("settingsBtn").onclick = () => {
   $("sWorkDays").replaceChildren(...WEEKDAYS.map((d, i) =>
     el("label", {}, el("input", { type: "checkbox", value: i, checked: s.work_days.includes(i) }), d)));
   ui.mandatory = [...s.mandatory_days];
+  ui.carry = { ...s.carry_over };
+  showCarry();
   renderMandatory();
   $("sMandatoryCounts").checked = s.mandatory_counts;
   $("sRegion").replaceChildren(...Object.entries(REGIONS).map(([k, v]) =>
@@ -330,6 +342,38 @@ $("sMandatoryAdd").onclick = () => {
   renderMandatory();
 };
 
+// Carry-over is edited for the year being viewed; other years are kept in ui.carry.
+function stashCarry() {
+  const v = $("sCarry").value.trim().replace(",", ".");
+  ui.carry[String(ui.year)] = v;
+  return ui.carry;
+}
+
+function showCarry() {
+  $("sCarryYear").textContent = ui.year;
+  const v = ui.carry[String(ui.year)];
+  $("sCarry").value = v === undefined || v === 0 ? "" : String(v).replace(".", decimalMark());
+  // Offer last year's leftover days, if last year was used at all.
+  const p = profile(), prev = ui.year - 1;
+  const usedLastYear = p.holidays.some((h) => h.start <= `${prev}-12-31` && h.end >= `${prev}-01-01`);
+  const left = usedLastYear
+    ? yearSummary(p.holidays, { ...p.settings, carry_over: cleanCarry(ui.carry, p.settings) }, prev, localToday()).remaining
+    : 0;
+  $("sCarryFill").hidden = !(left > 0);
+  $("sCarryFill").textContent = `Use what was left in ${prev}: ${num(left)} days`;
+  $("sCarryFill").onclick = () => { $("sCarry").value = num(left).replace(".", decimalMark()); };
+}
+
+const decimalMark = () => (1.5).toLocaleString().charAt(1);
+
+function cleanCarry(raw, current) {
+  try {
+    return validateSettings({ carry_over: raw }, current).carry_over;
+  } catch {
+    return current.carry_over;
+  }
+}
+
 $("settingsForm").addEventListener("submit", (e) => {
   e.preventDefault();
   $("settingsError").textContent = "";
@@ -339,6 +383,7 @@ $("settingsForm").addEventListener("submit", (e) => {
       allowance: $("sAllowance").value,
       work_days: [...$("sWorkDays").querySelectorAll("input:checked")].map((i) => Number(i.value)),
       mandatory_days: ui.mandatory,
+      carry_over: stashCarry(),
       mandatory_counts: $("sMandatoryCounts").checked,
       bank_region: $("sRegion").value,
       bank_holidays_off: $("sBankOff").checked,

@@ -6,7 +6,7 @@ import { decodeShare, encodeShare } from "../js/share.js";
 
 const profile = {
   name: "Alex",
-  settings: { ...DEFAULT_SETTINGS, allowance: 30, bank_region: "scotland", calendar_name: "Alex Example" },
+  settings: { ...DEFAULT_SETTINGS, allowance: 30, bank_region: "scotland", calendar_name: "Alex Example", carry_over: { 2026: 0.765 } },
   holidays: [
     { id: "a", name: "Lisbon", start: "2026-10-12", end: "2026-10-16", portion: "full", status: "booked", note: "secret" },
     { id: "b", name: "Dentist", start: "2026-11-02", end: "2026-11-02", portion: "pm", status: "booked", note: "" },
@@ -27,6 +27,7 @@ test("round trip without pencilled holidays or allowance", async () => {
   assert.equal(data.settings.bank_region, "scotland");
   assert.equal(data.showAllowance, false);
   assert.equal(data.settings.calendar_name, "");
+  assert.deepEqual(data.settings.carry_over, {}, "carry-over is private unless days left are shared");
 });
 
 test("options include pencilled holidays and allowance", async () => {
@@ -35,6 +36,7 @@ test("options include pencilled holidays and allowance", async () => {
   assert.equal(data.holidays[2].status, "pencilled");
   assert.equal(data.showAllowance, true);
   assert.equal(data.settings.allowance, 30);
+  assert.deepEqual(data.settings.carry_over, { 2026: 0.765 });
 });
 
 test("rejects junk and survives tampered settings", async () => {

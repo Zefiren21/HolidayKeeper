@@ -3,7 +3,7 @@
 
 import { DEFAULT_SETTINGS, isValidISO, PORTIONS, STATUSES, validateSettings } from "./core.js";
 
-const SETTINGS_KEYS = ["work_days", "mandatory_days", "mandatory_counts", "bank_region", "bank_holidays_off", "allowance"];
+const SETTINGS_KEYS = ["work_days", "mandatory_days", "mandatory_counts", "bank_region", "bank_holidays_off", "allowance", "carry_over"];
 
 function toBase64Url(bytes) {
   let bin = "";
@@ -31,7 +31,10 @@ export async function encodeShare(profile, options = {}) {
     .map((h) => [h.start, h.end, h.name, h.portion === "full" ? 0 : h.portion, h.status === "pencilled" ? 1 : 0]);
   const settings = {};
   for (const k of SETTINGS_KEYS) settings[k] = profile.settings[k];
-  if (!options.allowance) delete settings.allowance;
+  if (!options.allowance) {
+    delete settings.allowance;
+    delete settings.carry_over;
+  }
   const payload = { v: 1, n: profile.name, h: holidays, s: settings };
   const bytes = new TextEncoder().encode(JSON.stringify(payload));
   if (typeof CompressionStream === "function") {

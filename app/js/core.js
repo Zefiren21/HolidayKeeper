@@ -15,7 +15,12 @@ export const DEFAULT_SETTINGS = {
   bank_region: "england-and-wales",
   bank_holidays_off: false, // the job gives bank holidays off on top of the allowance
   calendar_name: "",
+  carry_over: {}, // { "2026": 0.765 } days brought forward into that year (negative = borrowed)
 };
+
+/** Round away floating-point noise (0.1 + 0.2) while keeping up to 3 decimals, e.g. 0.765. */
+export const round3 = (n) => Math.round(n * 1000) / 1000;
+export const carryOver = (settings, year) => Number(settings.carry_over?.[String(year)] || 0);
 
 export const MANDATORY_NAMES = { "01-01": "New Year's Day", "12-25": "Christmas Day", "12-26": "Boxing Day" };
 
@@ -216,11 +221,13 @@ export function yearSummary(holidays, settings, year, today) {
   for (const [d, w] of booked) d <= today ? (taken += w) : (bookedAhead += w);
   for (const [d, w] of pencil) pencilled += Math.max(0, w - (booked.get(d) || 0));
 
-  const allowance = Number(settings.allowance);
-  const remaining = allowance - taken - bookedAhead;
+  const baseAllowance = Number(settings.allowance);
+  const carried = carryOver(settings, year);
+  const allowance = round3(baseAllowance + carried);
+  const remaining = round3(allowance - taken - bookedAhead);
   return {
-    year, allowance, taken, booked: bookedAhead, pencilled, remaining,
-    remainingIfPencilled: remaining - pencilled,
+    year, allowance, baseAllowance, carryOver: carried, taken, booked: bookedAhead, pencilled, remaining,
+    remainingIfPencilled: round3(remaining - pencilled),
     mandatory, bankHolidays: bank, bankRegion: REGIONS[settings.bank_region],
   };
 }
@@ -310,6 +317,19 @@ export function validateSettings(data, current) {
   if ("bank_region" in data) {
     if (!(data.bank_region in REGIONS)) throw new Error("unknown bank holiday region");
     s.bank_region = data.bank_region;
+  }
+  if ("carry_over" in data) {
+    const co = data.carry_over;
+    if (!co || typeof co !== "object" || Array.isArray(co)) throw new Error("carry-over must be a list of years");
+    const clean = {};
+    for (const [year, value] of Object.entries(co)) {
+      if (!/^\d{4}$/.test(year)) throw new Error(`invalid carry-over year "${year}"`);
+      if (value === "" || value === null) continue;
+      const n = Number(value);
+      if (!Number.isFinite(n) || n < -366 || n > 366) throw new Error("carry-over must be a number of days between -366 and 366");
+      if (round3(n) !== 0) clean[year] = round3(n);
+    }
+    s.carry_over = clean;
   }
   if ("calendar_name" in data) s.calendar_name = String(data.calendar_name).trim().slice(0, 100);
   return s;

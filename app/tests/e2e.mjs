@@ -133,6 +133,20 @@ try {
   assert.equal(await page.locator("#profile option").count(), 3);
   assert.equal(await page.textContent("#pencilled"), "0");
 
+  // Carry-over with decimals, for the year being viewed.
+  await page.selectOption("#profile", { index: 0 });
+  await page.click("#settingsBtn");
+  assert.equal(await page.textContent("#sCarryYear"), String(Y));
+  await page.fill("#sCarry", "0,765"); // comma decimal keypads work too
+  await page.click("#settingsForm button[type=submit]");
+  const before = Number(await page.textContent("#allowance"));
+  assert.equal(before, 30.765);
+  assert.match(await page.textContent("#carryLine"), /30 \+ 0\.765 carried over from/);
+  await page.click("#prevYear");
+  assert.equal(await page.textContent("#allowance"), "30");
+  assert.ok(await page.locator("#carryLine").isHidden());
+  await page.click("#nextYear");
+
   // Survives a reload.
   await page.reload();
   assert.equal(await page.locator("#profile option").count(), 3);
