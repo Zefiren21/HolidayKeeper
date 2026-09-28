@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f4f6f5" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#111716" media="(prefers-color-scheme: dark)">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Holidays">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="description" content="Track your holiday allowance, bank holidays and plans on your phone.">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="styles.css">
+  <title>HolidayKeeper</title>
+</head>
+<body>
+<main>
+  <header>
+    <h1>HolidayKeeper</h1>
+    <select id="profile" aria-label="Whose holidays"></select>
+    <button class="ghost small" id="settingsBtn">Settings</button>
+  </header>
+
+  <div id="installHint" class="card stack" style="margin-bottom:14px" hidden>
+    <strong>Install on your iPhone</strong>
+    <span class="muted">In Safari tap <b>Share</b> → <b>Add to Home Screen</b>. Do this before adding holidays:
+      the installed app keeps its own data, separate from Safari.</span>
+    <button type="button" class="ghost small" id="installDismiss" style="justify-self:start">Got it</button>
+  </div>
+
+  <!-- Settings -->
+  <form id="settingsForm" class="card" hidden>
+    <strong>Settings</strong>
+    <label>Name <input id="sName" maxlength="40" required></label>
+    <label>Holiday allowance per year (days)
+      <input id="sAllowance" type="number" min="0" max="366" step="0.5" inputmode="decimal" required>
+    </label>
+    <div>
+      <div class="muted">Days I work</div>
+      <div class="days" id="sWorkDays"></div>
+    </div>
+    <div class="stack" style="gap:8px">
+      <div class="muted">Mandatory days off (added automatically every year)</div>
+      <div class="chips" id="sMandatory"></div>
+      <div class="row">
+        <input id="sMandatoryNew" type="date" aria-label="Add a mandatory day">
+        <button type="button" class="ghost" id="sMandatoryAdd">+ Add day</button>
+      </div>
+      <label class="check"><input type="checkbox" id="sMandatoryCounts"> Mandatory days come out of my allowance</label>
+    </div>
+    <label>Bank holidays for <select id="sRegion"></select></label>
+    <label class="check"><input type="checkbox" id="sBankOff"> My job gives bank holidays off (not taken from allowance)</label>
+    <label>My name in shared calendars (for imports)
+      <input id="sCalName" maxlength="100" placeholder="e.g. Alex Smith">
+    </label>
+    <p class="error" id="settingsError"></p>
+    <div class="row">
+      <button type="button" class="ghost" id="settingsCancel">Cancel</button>
+      <button type="submit">Save</button>
+    </div>
+    <button type="button" class="danger small" id="deleteProfile">Remove this person and their holidays</button>
+  </form>
+
+  <div class="yearnav">
+    <button class="ghost" id="prevYear" aria-label="Previous year">‹</button>
+    <b id="yearLabel"></b>
+    <button class="ghost" id="nextYear" aria-label="Next year">›</button>
+  </div>
+
+  <section class="card summary" id="summary">
+    <div class="big"><b id="remaining"></b><span class="muted" id="remainingLabel"></span></div>
+    <p class="if-pencilled" id="ifPencilled" hidden></p>
+    <div class="bar" aria-hidden="true"><span class="b-taken" id="barTaken"></span><span class="b-booked" id="barBooked"></span><span class="b-pencilled" id="barPencilled"></span></div>
+    <div class="stats">
+      <div><b id="taken"></b><span>taken</span></div>
+      <div><b id="booked"></b><span>booked</span></div>
+      <div><b id="pencilled"></b><span>pencilled</span></div>
+      <div><b id="allowance"></b><span>allowance</span></div>
+    </div>
+  </section>
+
+  <div class="seg" role="tablist" aria-label="View">
+    <button role="tab" data-view="list" id="tabList">List</button>
+    <button role="tab" data-view="calendar" id="tabCalendar">Calendar</button>
+  </div>
+
+  <section id="listView">
+    <h2>Upcoming</h2>
+    <ul id="upcoming"></ul>
+    <h2 id="pastTitle">Earlier this year</h2>
+    <ul id="past"></ul>
+  </section>
+
+  <section id="calendarView" hidden>
+    <h2 id="calendarTitle">Calendar</h2>
+    <div id="calendar"></div>
+    <div id="legend"></div>
+  </section>
+
+  <h2>Add holiday</h2>
+  <form id="addForm" class="card">
+    <label>Name <input id="name" required maxlength="100" placeholder="Summer in Lisbon"></label>
+    <div class="row">
+      <label>Start <input id="start" type="date" required></label>
+      <label>End <input id="end" type="date"></label>
+    </div>
+    <div class="row">
+      <label>Length
+        <select id="portion">
+          <option value="full">Full days</option>
+          <option value="am">Half day – morning</option>
+          <option value="pm">Half day – afternoon</option>
+        </select>
+      </label>
+      <label>Status
+        <select id="status">
+          <option value="booked">Booked</option>
+          <option value="pencilled">Pencilled in (just planning)</option>
+        </select>
+      </label>
+    </div>
+    <label>Note <input id="note" maxlength="500" placeholder="Optional"></label>
+    <p class="error" id="addError"></p>
+    <button type="submit">Add holiday</button>
+  </form>
+
+  <h2 id="bankTitle">UK bank holidays</h2>
+  <div class="card"><ul class="bank" id="bank"></ul></div>
+
+  <h2>Share</h2>
+  <div class="card stack">
+    <label class="check"><input type="checkbox" id="shareIncludePencilled"> Include pencilled-in holidays</label>
+    <label class="check"><input type="checkbox" id="shareIncludeAllowance"> Show how many days I have left</label>
+    <div class="row">
+      <button type="button" id="makePicture">Calendar picture</button>
+      <button type="button" class="soft" id="makeLink">Share link</button>
+    </div>
+    <div id="picture" class="picture stack" hidden>
+      <img id="pictureImg" alt="Year calendar with holidays marked">
+      <div class="actions">
+        <button type="button" id="pictureShare">Share or save picture</button>
+      </div>
+    </div>
+    <div id="link" class="stack" hidden>
+      <input id="linkUrl" readonly aria-label="Share link">
+      <div class="actions" id="linkActions"></div>
+      <p class="muted" style="margin:0">The link contains a snapshot of your dates (never your notes). It works
+        anywhere, but won't update — send a new one after changes.</p>
+    </div>
+  </div>
+
+  <h2>Import from Google Calendar</h2>
+  <details class="card" id="importBox">
+    <summary>Import holidays</summary>
+    <div class="stack">
+      <p class="muted" style="margin:0">Quickest way: on a computer, search your name in Google Calendar, select the list of
+        results, copy and paste it below. Copying from the Schedule view or an .ics file also works.</p>
+      <label>Only events containing this name
+        <input id="impName" maxlength="100" placeholder="Leave empty to import every event">
+      </label>
+      <label>Calendar file (.ics or .txt)
+        <input id="impFile" type="file" accept=".ics,.txt,text/calendar,text/plain">
+      </label>
+      <label>…or paste the text
+        <textarea id="impText" rows="4" placeholder="9&#10;Jan 2026, Fri&#10;All day&#10;Alex Smith (Day 1/4)"></textarea>
+      </label>
+      <button type="button" id="impPreview">Preview</button>
+      <p class="error" id="impError"></p>
+      <div id="impResult" hidden class="stack">
+        <ul class="preview" id="impList"></ul>
+        <button type="button" id="impCommit">Import selected</button>
+      </div>
+    </div>
+  </details>
+
+  <h2>Backup</h2>
+  <div class="card stack">
+    <p class="muted" style="margin:0">Your holidays are saved on this phone only. Save a backup now and then
+      (e.g. to Files or iCloud Drive) so you can restore them on a new phone.</p>
+    <div class="row">
+      <button type="button" class="soft" id="backupSave">Save backup</button>
+      <label class="btn" style="display:block; cursor:pointer">Restore backup
+        <input id="backupRestore" type="file" accept=".json,application/json" hidden>
+      </label>
+    </div>
+    <p class="error" id="backupError"></p>
+  </div>
+
+  <p class="muted foot">Saved on this device only · <a href="https://github.com/Zefiren21/HolidayKeeper" style="color:inherit">HolidayKeeper</a></p>
+</main>
+
+<div id="sheet" class="sheet" hidden>
+  <div class="sheet-body card" role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
+    <div class="sheet-head">
+      <h3 id="sheetTitle"></h3>
+      <button type="button" class="ghost" id="sheetClose" aria-label="Close">✕</button>
+    </div>
+    <ul class="sheet-info" id="sheetInfo"></ul>
+    <div class="sheet-actions" id="sheetActions"></div>
+  </div>
+</div>
+
+<script type="module" src="js/app.js"></script>
+</body>
+</html>

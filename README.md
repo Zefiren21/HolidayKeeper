@@ -1,9 +1,69 @@
 # HolidayKeeper
 
-A holiday tracker you run on your laptop and open from your phone over the same Wi-Fi.
-Everyone in the house gets their own login, allowance and settings.
+A holiday tracker for your phone: yearly allowance, bank holidays, mandatory days off,
+pencilled-in plans, a tap-through calendar, and shareable calendar pictures.
 
-## Windows: just download and run
+There are two versions:
+
+- **Phone app (`app/`)** — the main one. Install it from the web onto your iPhone's home
+  screen. Everything runs and is saved on the phone. No laptop or server is needed.
+- **Laptop version (`server.py`)** — the original. It runs on your computer and phones on
+  the same Wi-Fi use it, with logins and live sharing between accounts. It's described
+  further down.
+
+## Phone app
+
+**Install on iPhone:**
+
+1. Open **https://zefiren21.github.io/HolidayKeeper/** in Safari.
+2. Tap **Share → Add to Home Screen**.
+3. Open it from the new icon. It works offline.
+
+Add holidays in the installed app, not in Safari: iOS keeps their data separate.
+
+**Features:**
+
+- **Allowance.** Set it in Settings. The summary shows days taken, booked and left.
+  Only your working days count, and half days count as 0.5.
+- **Pencilled-in holidays.** Choose *Pencilled in* when adding a holiday, or tap a day
+  and pick **✎ Pencil in this day**. These plans don't touch your real numbers. The
+  summary shows "X left if you take your pencilled-in days". Tap **Book it** once your
+  job approves.
+- **Calendar view.** Switch **List / Calendar**. You get the whole year with colour
+  coding:
+  - Taken, booked, pencilled in, mandatory and bank holidays each have their own colour.
+  - Weekends are grey, and today is outlined.
+  - Tap a month to zoom in, or tap a day to see what's on it and add, pencil in, book
+    or delete from there.
+- **Mandatory days and bank holidays.** These work as in the laptop version: mandatory
+  days are customisable, and bank holidays for England & Wales, Scotland or Northern
+  Ireland are offered with **+ Book** or **✎**.
+- **Several people on one phone.** Use the name menu at the top (e.g. you and your
+  wife). Each person has their own allowance and settings.
+- **Share.**
+  - **Calendar picture:** a whole-year image with the same colour coding, sent through
+    the share sheet (WhatsApp, Messages) or saved to Photos.
+  - **Share link:** a read-only page with the calendar. Your dates are packed into the
+    link itself, so it works anywhere with no server. It's a snapshot and doesn't
+    update, and it never includes notes.
+  - **Options:** you choose whether pencilled-in holidays and days left are included.
+- **Import** from Google Calendar text or an `.ics` file.
+  - **Quickest route:** on a computer, search your name in Google Calendar, then copy the
+    results and paste them in.
+  - **Automatic sync isn't possible:** the phone app can't sync a calendar link directly,
+    because Google blocks that from web pages.
+- **Backup.** Everything is stored on the phone. Use **Save backup** now and then (to
+  Files or iCloud Drive), and **Restore backup** on a new phone.
+
+**Try it on a computer:** run `node app/tests/serve.mjs`, then open http://localhost:8090/.
+
+**Publishing:** pushes to `main` are published by `.github/workflows/phone-app.yml`.
+One-time setup is needed: in the repo, go to **Settings → Pages → Build and deployment →
+Source: GitHub Actions**. GitHub Pages needs the repository to be public, or a paid plan.
+
+## Laptop version
+
+### Windows: just download and run
 
 1. Download **HolidayKeeper.exe** from the
    [latest release](https://github.com/Zefiren21/HolidayKeeper/releases/latest).
@@ -23,7 +83,7 @@ First run notes:
 To build the exe yourself on Windows: `pip install pyinstaller` then `pyinstaller HolidayKeeper.spec`.
 The file appears in `dist\`.
 
-## Run from source (any OS)
+### Run from source (any OS)
 
 No dependencies — just Python 3.8+.
 
@@ -44,7 +104,7 @@ their own account. Tip: "Add to Home Screen" gives you an app icon.
 Data lives in `holidaykeeper.db` (SQLite) next to `server.py`. If you used the earlier
 version, its `holidays.json` is moved into the first account created.
 
-## Features
+### Features
 
 - **Logins** — separate holidays and settings per person.
 - **Yearly allowance** — set in Settings (e.g. 30 days). The summary shows days taken,
@@ -69,7 +129,7 @@ version, its `holidays.json` is moved into the first account created.
   - **Review first:** you see a preview before anything is saved. Holidays you already
     have are unticked.
 
-## Sharing
+### Sharing
 
 Open the **Sharing** section:
 
@@ -87,18 +147,25 @@ Open the **Sharing** section:
 ## Tests
 
 ```sh
-python3 -m unittest discover -s tests -t .
+node --test app/tests/*.test.mjs           # phone app logic
+node app/tests/e2e.mjs                     # phone app in a real browser (needs Playwright)
+python3 -m unittest discover -s tests -t . # laptop server
 ```
 
-- **What's covered:** the bank holiday rules, the allowance maths, the calendar
-  importers, and the full HTTP API. The API tests start a real server.
+- **Phone app:** unit tests cover the bank holiday rules, allowance and pencilled-in
+  maths, the calendar colours, the importers, share links and storage. The browser test
+  drives the app at iPhone size: adding holidays, the calendar views, the day panel,
+  importing, pictures, share links, and switching people. CI runs both
+  (`.github/workflows/phone-app.yml`) and keeps screenshots as an artifact.
+- **Laptop version:** tests cover the same rules plus the full HTTP API, and start a
+  real server.
 - **GitHub Actions:** runs them on every push (`.github/workflows/tests.yml`). The
   Windows build (`.github/workflows/windows-build.yml`) also runs them on Windows,
   builds the exe and checks that it starts.
 - **Claude Code:** a Stop hook in `.claude/settings.json` runs them at the end of every
   turn and sends any failures back to Claude to fix.
 
-## Can't connect from your phone?
+### Laptop version: can't connect from your phone?
 
 - Make sure the phone and laptop are on the **same Wi-Fi** (not guest network, not mobile data).
 - **Firewall:** allow incoming connections for Python when prompted.

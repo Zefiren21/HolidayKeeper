@@ -1,0 +1,11 @@
+{
+  "name": "holidaykeeper",
+  "private": true,
+  "type": "module",
+  "description": "Installable holiday tracker web app (app/) plus the optional laptop server (Python).",
+  "scripts": {
+    "test": "node --test app/tests/*.test.mjs",
+    "e2e": "node app/tests/e2e.mjs",
+    "serve": "node app/tests/serve.mjs"
+  }
+}
